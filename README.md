@@ -12,7 +12,23 @@ back a finished Short:
 
 No editing app. It runs on your Mac with ffmpeg, whisper.cpp and Python. No API keys, nothing uploaded.
 
-## Install
+## Install with one prompt
+
+Open Claude Code and paste this:
+
+```
+Install the claude-shorts skill for me:
+1. Clone https://github.com/Ansub/claude-shorts into ~/.claude/skills/claude-shorts
+   (if it's already there, git pull instead).
+2. Read its README.md and SKILL.md so you know what it does.
+3. Run `zsh ~/.claude/skills/claude-shorts/setup.sh`. If Homebrew is missing, stop and tell me how to install it.
+   The setup downloads a 3 GB speech model, so let it run until it finishes.
+4. Check that ffmpeg, whisper-cli and yt-dlp work, and that ~/.cache/claude-shorts/venv/bin/python can import PIL and cairosvg.
+5. Tell me in a few lines what got installed, whether I need to restart Claude Code to see /claude-shorts,
+   and the exact prompt to edit my first Short.
+```
+
+## Install by hand
 
 1. Clone it into your Claude Code skills folder:
    ```bash
