@@ -1,0 +1,88 @@
+# style | display text (corrected) | spoken words consumed | logo
+s | OpenAI just released | 3
+s | their answer to | 3
+h | Grok Bot | 1 | grok
+
+s | which is | 2
+h | Dots | 1 | openai
+
+s | and honestly, it | 3
+c | Sucks | 1
+
+s | Here are four things | 4
+s | that make it | 3
+c | Bad | 1
+
+s | First, it is very | 4
+c | Slow | 1
+
+s | I compared it with a normal | 6
+h | ChatGPT | 1 | openai
+s | conversation, | 1
+
+s | where I asked both of them | 4
+s | the same thing: | 3
+
+s | "What are three | 4
+h | good news | 2
+s | stories from today?" | 2
+
+s | And it took | 3
+c | way more time | 4
+s | than a normal conversation. | 4
+
+s | Second, it uses | 3
+h | GPT-6 Astra | 2 | openai
+s | for everything. | 2
+
+s | Even if you say | 5
+c | Hello or Hi | 3
+s | to it, it will use that. | 4
+
+s | And since that is their | 5
+h | frontier model, | 2
+
+s | it takes way too much | 5
+c | Time | 1
+s | to answer. | 2
+
+s | Third, you can only create | 5
+h | a single bot | 3
+s | right now, which sucks. | 4
+
+s | I can simply use | 4
+h | Grok Bot | 1 | grok
+s | right now, | 2
+
+s | where I have | 3
+h | multiple bots | 2
+
+s | handling | 4
+s | different parts of my | 4
+c | Life | 1
+
+s | But I can't do that with | 6
+h | Dots | 1 | openai
+s | right now. | 2
+
+s | Fourth, the main thing | 4
+s | OpenAI is known for is their | 7
+h | Computer Use | 2
+
+s | And honestly, that | 3
+c | Sucks | 1
+s | when it comes to Dots. | 5
+
+s | But all of these are | 5
+h | fixable issues, | 2
+s | and I hope they fix them. | 6
+
+s | If they do, | 3
+s | I will let you know. | 5
+
+s | In the meantime, what was | 5
+s | your experience with | 3
+h | OpenAI Dots? | 2 | openai
+
+s | Let me know in the | 5
+c | Comments | 2

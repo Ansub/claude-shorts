@@ -1,0 +1,22 @@
+# Correct spellings for names Whisper often gets wrong. One per line: Correct = wrong, wrong, ...
+# The skill reads this before cleaning the transcript. Add your own at ~/.config/claude-shorts/glossary.txt
+ChatGPT = chatGBD, chat GPT, chat gbt, chatgpt
+Claude = cloud, clod, Claud
+Claude Code = cloud code, clawed code
+OpenAI = open AI, open a, OpenA, OpenAid
+Anthropic = anthropics, and tropic
+Grok = grog, crock, groc
+Gemini = Jemini
+Cursor = curser
+Figma = figma, fig ma
+Framer = framo, frame er
+Notion = notion
+Midjourney = mid journey
+Perplexity = perplexity
+DeepSeek = deep seek
+Llama = lama
+GitHub = git hub, github
+Vercel = versel, vercell
+Supabase = supa base, super base
+YouTube = you tube, youtube
+TikTok = tik tok, tiktok
