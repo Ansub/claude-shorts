@@ -5,6 +5,7 @@ Usage: frame_sheet.py <source_video> <out_dir> <t1,t2,...> [--face x0,y0,x1,y1]
 Writes <out_dir>/f_<t>.png (1080x1920) and <out_dir>/sheet.jpg. With --face, also writes
 <out_dir>/faces.jpg: the same crop of every frame side by side, for checking eyes and mouth.
 """
+from platform_tools import find_tool
 import os, subprocess, sys
 from PIL import Image, ImageDraw
 
@@ -14,7 +15,7 @@ ts = times.split(",")
 frames = []
 for t in ts:
     p = os.path.join(out, f"f_{t}.png")
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", t, "-i", src, "-frames:v", "1",
+    subprocess.run([find_tool("ffmpeg"), "-y", "-v", "error", "-ss", t, "-i", src, "-frames:v", "1",
                     "-vf", "scale=1080:1920", p], check=True)
     frames.append((t, Image.open(p)))
 cols = 8; rows = (len(frames) + cols - 1) // cols

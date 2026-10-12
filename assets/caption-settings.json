@@ -35,7 +35,7 @@
  "logoTintOn": 0,
  "backdropColor": "#000000",
  "backdropOpacity": 0,
- "backdropHeight": 900,
+ "backdropPad": 50,
  "fontText": "Inter.ttf",
  "fontScript": "GreatVibes-Regular.ttf",
  "scriptSpace": 1.6

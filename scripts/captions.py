@@ -11,13 +11,14 @@ Set FPS=<num/den> in the environment to the clip's frame rate.
 Each word appears on its spoken frame and joins the words already on screen (line layout is fixed up front).
 Small words blur-fade in; hero words just appear; logos pop.
 Usage: captions.py <workdir> list
-       captions.py <workdir> qa                 -> every block fully revealed, tiled into previews/qa.jpg (crop y 160-880)
+       captions.py <workdir> qa                 -> every block fully revealed, tiled into previews/qa.jpg (720 px around each block)
        captions.py <workdir> preview t1,t2,...   -> workdir/previews/p_<t>.png + grid.jpg
        captions.py <workdir> still <bg.jpg> <out.png> <block-index>
        captions.py <workdir> full out.mov N      -> ProRes 4444 overlay with exactly N frames
 """
+from platform_tools import find_tool
 import io, json, os, subprocess, sys
-import cairosvg
+from platform_tools import svg_to_png
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
@@ -30,8 +31,30 @@ FPS = float(_n) / float(_d)
 S = {}
 for _sp in (os.path.join(ASSETS, "caption-settings.json"), os.path.join(USER, "settings.json"), os.path.join(HERE, "settings.json")):
     if os.path.exists(_sp):
-        S.update(json.load(open(_sp)))
+        S.update(json.load(open(_sp, encoding="utf-8")))
 SIZE = {"s": S["sizeS"], "h": S["sizeH"], "c": S["sizeC"]}
+
+# Per-shot caption bands (written by reframe.py for Shorts cut from a long video): [{start, end, cy, safeTop, safeBot,
+# backdropOpacity?}] in source.mov seconds. Mapped onto the cut timeline through segments.json; a block takes the band
+# of the shot it starts in. Without bands.json every block uses the settings above.
+BAND_KEYS = ("cy", "safeTop", "safeBot", "backdropOpacity")
+_bp, _sp = os.path.join(HERE, "bands.json"), os.path.join(HERE, "segments.json")
+BANDS = json.load(open(_bp, encoding="utf-8")) if os.path.exists(_bp) else []
+SEGS = json.load(open(_sp, encoding="utf-8")) if os.path.exists(_sp) and BANDS else []
+
+
+def band_at(t):
+    """Caption band for cut-timeline second t."""
+    st, rec = t, 0.0
+    for sg in SEGS:
+        d = (sg["ef"] - sg["sf"]) / FPS
+        if t < rec + d: st = sg["sf"] / FPS + t - rec; break
+        rec += d
+    b = {k: S[k] for k in BAND_KEYS if k in S}
+    for x in BANDS:
+        if x["start"] <= st < x["end"]:
+            b.update({k: x[k] for k in BAND_KEYS if k in x}); break
+    return b
 
 
 def font_path(name):
@@ -154,7 +177,7 @@ _logo = {}
 def logo_img(name, h):
     key = (name, h)
     if key not in _logo:
-        png = cairosvg.svg2png(url=(os.path.join(HERE, f"logos/{name}.svg") if os.path.exists(os.path.join(HERE, f"logos/{name}.svg")) else os.path.join(ASSETS, f"logos/{name}.svg")), output_height=max(1, int(h)))
+        png = svg_to_png(path=(os.path.join(HERE, f"logos/{name}.svg") if os.path.exists(os.path.join(HERE, f"logos/{name}.svg")) else os.path.join(ASSETS, f"logos/{name}.svg")), height=max(1, int(h)))
         im = Image.open(io.BytesIO(png)).convert("RGBA")
         if S["logoTintOn"] >= 1:
             t = Image.new("RGBA", im.size, rgb(S["logoTint"]) + (0,)); t.putalpha(im.getchannel("A")); im = t
@@ -209,9 +232,9 @@ def layout_line(L, fit=1.0):
 
 
 def load_blocks():
-    words = json.load(open(os.path.join(HERE, "words_cut.json")))
+    words = json.load(open(os.path.join(HERE, "words_cut.json"), encoding="utf-8"))
     blocks, cur = [], []
-    for raw in open(os.path.join(HERE, "blocks.txt")):
+    for raw in open(os.path.join(HERE, "blocks.txt"), encoding="utf-8"):
         raw = raw.rstrip("\n")
         if raw.startswith("#"):
             continue
@@ -236,18 +259,22 @@ def load_blocks():
         for L in b:
             L["block_end"] = b_end
             layout_line(L)
+        B = band_at(b[0]["t0"])
+        for L in b: L["band"] = B
         total = sum(L["bh"] for L in b) + S["gap"] * (len(b) - 1)
-        band = S["safeBot"] - S["safeTop"]
+        band = B["safeBot"] - B["safeTop"]
         if total > band:  # too tall for the space above the head: shrink only the hero lines, small words keep their size
             small = sum(L["bh"] for L in b if L["style"] == "s")
             hero = sum(L["bh"] for L in b if L["style"] != "s")
-            fit = (band - S["gap"] * (len(b) - 1) - small) / hero
+            fit = max(0.4, (band - S["gap"] * (len(b) - 1) - small) / hero) if hero else 1
             for L in b:
                 if L["style"] != "s":
                     layout_line(L, fit)
             total = sum(L["bh"] for L in b) + S["gap"] * (len(b) - 1)
-        y = round(S["cy"] - total / 2)
-        y = max(S["safeTop"], min(y, S["safeBot"] - total))
+            if total > band:  # small words never shrink, so the block itself is too long: split it in blocks.txt
+                print(f"WARN block {k} ('{b[0]['text']}' ...) is {total}px tall, the band is {band}px: split it", file=sys.stderr)
+        y = round(B["cy"] - total / 2)
+        y = max(B["safeTop"], min(y, B["safeBot"] - total))
         for L in b:
             L["y"] = y
             y += L["bh"] + S["gap"]
@@ -276,7 +303,24 @@ def draw_word(out, w, L, age, fade):
     paste(out, img, x, y, a)
 
 
+def backdrop(b):
+    """Full-width dark scrim behind a block, feathered top and bottom: keeps captions readable over screen recordings.
+    backdropOpacity 0 = off (default for face shots); reframe.py turns it on for split layouts."""
+    if "scrim" not in b[0]:
+        op = b[0]["band"].get("backdropOpacity", S.get("backdropOpacity", 0)) if "band" in b[0] else S.get("backdropOpacity", 0)
+        if op <= 0: b[0]["scrim"] = None; return None
+        pad = S.get("backdropPad", 50); y0 = b[0]["y"] - pad; y1 = b[-1]["y"] + b[-1]["bh"] + pad
+        m = Image.new("L", (W, int(y1 - y0) + 2 * pad), 0)
+        ImageDraw.Draw(m).rectangle([0, pad, W, m.height - pad], fill=int(255 * op / 100))
+        m = m.filter(ImageFilter.GaussianBlur(pad / 2))
+        im = Image.new("RGBA", m.size, rgb(S.get("backdropColor", "#000000")) + (0,)); im.putalpha(m)
+        b[0]["scrim"] = (im, y0 - pad)
+    return b[0]["scrim"]
+
+
 def draw_block(out, b, t, fade=1.0):
+    sc = backdrop(b)
+    if sc: paste(out, sc[0], 0, sc[1], min(1.0, (t - b[0]["t0"] + 0.04) / 0.12) * fade)
     for L in b:
         if L["logo_img"] is not None and t >= L["t0"] - 0.04:
             age = t - (L["t0"] - 0.04)
@@ -320,7 +364,7 @@ if __name__ == "__main__":
         for ts in sys.argv[2].split(","):
             t = float(ts)
             fp = os.path.join(HERE, f"previews/bg_{ts}.png")
-            subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", ts, "-i", os.path.join(HERE, "cut.mov"), "-frames:v", "1", fp], check=True)
+            subprocess.run([find_tool("ffmpeg"), "-v", "error", "-y", "-ss", ts, "-i", os.path.join(HERE, "cut.mov"), "-frames:v", "1", fp], check=True)
             bg = Image.open(fp).convert("RGBA"); bg.alpha_composite(frame(blocks, t))
             bg.convert("RGB").save(os.path.join(HERE, f"previews/p_{ts}.png"))
             tiles.append(bg.convert("RGB").resize((360, 640)))
@@ -329,16 +373,17 @@ if __name__ == "__main__":
         g.save(os.path.join(HERE, "previews/grid.jpg"), quality=90)
     elif cmd == "qa":  # every block at its fully revealed moment, over the cut, tiled into previews/qa.jpg
         os.makedirs(os.path.join(HERE, "previews"), exist_ok=True)
-        dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
-                                    os.path.join(HERE, "cut.mov")], capture_output=True, text=True).stdout)
+        dur = float(subprocess.run([find_tool("ffprobe"), "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                                    os.path.join(HERE, "cut.mov")], capture_output=True, text=True, encoding="utf-8", errors="replace").stdout)
         tiles = []
         for k, b in enumerate(blocks):
             t = min(b[-1]["t1"] + 0.2, b[0]["block_end"] - 0.09, dur - 0.05)  # past the last word's blur-in, before the fade-out
             fp = os.path.join(HERE, f"previews/qa_{k:02d}.png")
-            subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{t:.3f}", "-i", os.path.join(HERE, "cut.mov"), "-frames:v", "1", fp], check=True)
+            subprocess.run([find_tool("ffmpeg"), "-v", "error", "-y", "-ss", f"{t:.3f}", "-i", os.path.join(HERE, "cut.mov"), "-frames:v", "1", fp], check=True)
             bg = Image.open(fp).convert("RGBA"); bg.alpha_composite(frame(blocks, t)); bg = bg.convert("RGB")
             bg.save(fp)
-            tile = bg.crop((0, 160, 1080, 880)).resize((360, 240))
+            y0 = max(0, min(H - 720, b[0]["y"] - 100))  # 720 px window around the block, wherever its band is
+            tile = bg.crop((0, y0, 1080, y0 + 720)).resize((360, 240))
             ImageDraw.Draw(tile).text((6, 4), f"{k} @{t:.1f}s", fill="yellow")
             tiles.append(tile)
         cols = 6; rows = (len(tiles) + cols - 1) // cols
@@ -348,7 +393,7 @@ if __name__ == "__main__":
         print(os.path.join(HERE, "previews/qa.jpg"))
     elif cmd == "full":
         out, n = sys.argv[2], int(sys.argv[3])
-        ff = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", f"{W}x{H}", "-r", FPS_STR, "-i", "-",
+        ff = subprocess.Popen([find_tool("ffmpeg"), "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", f"{W}x{H}", "-r", FPS_STR, "-i", "-",
                                "-c:v", "prores_ks", "-profile:v", "4444", "-pix_fmt", "yuva444p10le", out], stdin=subprocess.PIPE)
         for i in range(n):
             ff.stdin.write(frame(blocks, i / FPS).tobytes())

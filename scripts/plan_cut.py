@@ -3,7 +3,8 @@
 
 Usage: plan_cut.py <workdir> <keep> --fps 30000/1001 [--gap 0.5] [--thresh 0.03]
 
-<keep> is a comma list of chunk ids from transcript.md, e.g. "c05,c06,c07,c08", optionally with a
+<keep> is "all" (every chunk with words: for finished exports), or a comma list of chunk ids from transcript.md,
+e.g. "c05,c06,c07,c08", optionally with a
 trimmed range "c12:33.70-35.36" (source seconds) to drop a stray word at a chunk edge.
 
 Rules (tuned on real Shorts):
@@ -32,9 +33,11 @@ def main():
     ap.add_argument("--fps", default="30000/1001"); ap.add_argument("--gap", type=float, default=0.5)
     ap.add_argument("--thresh", type=float, default=0.03); a = ap.parse_args()
     n_, d_ = (a.fps.split("/") + ["1"])[:2]; fps = float(n_) / float(d_)
-    t = json.load(open(os.path.join(a.work, "transcript.json"))); ch = t["chunks"]; dur = t["duration"]
+    t = json.load(open(os.path.join(a.work, "transcript.json"), encoding="utf-8")); ch = t["chunks"]; dur = t["duration"]
     r = levels(os.path.join(a.work, "audio.wav"))
     kept = []
+    if a.keep == "all":  # finished exports: keep every chunk with words, only the long gaps go
+        a.keep = ",".join(f"c{i:02d}" for i, c in enumerate(ch) if c.get("words"))
     for item in a.keep.split(","):
         item = item.strip()
         if ":" in item:
@@ -56,7 +59,7 @@ def main():
             if loud_at(r, tt) >= a.thresh:
                 warns += 1; print(f"WARN cut {lab} at {tt:.2f}s is not silent ({loud_at(r, tt):.2f} of peak)", file=sys.stderr)
         out.append({"start": round(sf / fps, 4), "end": round(ef / fps, 4), "sf": sf, "ef": ef, "chunks": sg["ids"]})
-    json.dump(out, open(os.path.join(a.work, "segments.json"), "w"), indent=1)
+    json.dump(out, open(os.path.join(a.work, "segments.json"), "w", encoding="utf-8"), indent=1)
     # cut list for the user
     kept_ids = {i for sg in segs for i in sg["ids"]}
     print("CUT LIST")

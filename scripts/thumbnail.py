@@ -22,8 +22,8 @@ frame, out, spec = args[0], args[1], args[2]
 work = tempfile.mkdtemp()
 if settings:
     import shutil; shutil.copy(settings, os.path.join(work, "settings.json"))
-open(os.path.join(work, "blocks.txt"), "w").write("")
-open(os.path.join(work, "words_cut.json"), "w").write("[]")
+open(os.path.join(work, "blocks.txt"), "w", encoding="utf-8").write("")
+open(os.path.join(work, "words_cut.json"), "w", encoding="utf-8").write("[]")
 sys.argv = ["captions.py", work]
 spec_ = importlib.util.spec_from_file_location("rc", os.path.join(os.path.dirname(os.path.abspath(__file__)), "captions.py"))
 rc = importlib.util.module_from_spec(spec_); spec_.loader.exec_module(rc)

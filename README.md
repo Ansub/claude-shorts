@@ -10,7 +10,11 @@ back a finished Short:
 - **Loudness** normalised to -14 LUFS for YouTube, Instagram and TikTok
 - **Thumbnail and title** drafted from what you actually say
 
-No editing app. It runs on your Mac with ffmpeg, whisper.cpp and Python. No API keys, nothing uploaded.
+**Got a long video instead?** Give it the whole thing (a YouTube video, podcast or webinar) and it picks the
+~10 moments that work on their own, reframes them vertical (your face, or screen on top and face below for
+screen recordings), and makes a finished Short of each. You approve the list once; it does the rest.
+
+No editing app. It runs on macOS, Windows and Linux with ffmpeg, whisper.cpp and Python. No API keys, nothing uploaded.
 
 ## Install with one prompt
 
@@ -19,11 +23,13 @@ Open Claude Code and paste this:
 ```
 Install the claude-shorts skill for me:
 1. Clone https://github.com/Ansub/claude-shorts into ~/.claude/skills/claude-shorts
-   (if it's already there, git pull instead).
+   (if it's already there, git pull instead). Install Git for my OS first if missing.
 2. Read its README.md and SKILL.md so you know what it does.
-3. Run `zsh ~/.claude/skills/claude-shorts/setup.sh`. If Homebrew is missing, stop and tell me how to install it.
-   The setup downloads a 3 GB speech model, so let it run until it finishes.
-4. Check that ffmpeg, whisper-cli and yt-dlp work, and that ~/.cache/claude-shorts/venv/bin/python can import PIL and cairosvg.
+3. Detect my OS: run setup.ps1 in native PowerShell on Windows (with -ExecutionPolicy Bypass),
+   or `bash ~/.claude/skills/claude-shorts/setup.sh` on macOS/Linux. Install prerequisites for me;
+   no WSL or manual Homebrew setup. The setup downloads a 3 GB speech model, so let it finish.
+4. Refresh PATH and run scripts/check_setup.py with the private venv Python (Scripts/python.exe on
+   Windows, bin/python elsewhere). Follow the OS commands in SKILL.md.
 5. Tell me in a few lines what got installed, whether I need to restart Claude Code to see /claude-shorts,
    and the exact prompt to edit my first Short.
 ```
@@ -34,13 +40,22 @@ Install the claude-shorts skill for me:
    ```bash
    git clone https://github.com/Ansub/claude-shorts ~/.claude/skills/claude-shorts
    ```
-2. Run the one-time setup (installs ffmpeg, whisper.cpp, yt-dlp with Homebrew and downloads a 3 GB speech model):
+2. Run the one-time setup (installs the tools and downloads a 3 GB speech model):
    ```bash
-   zsh ~/.claude/skills/claude-shorts/setup.sh
+   bash ~/.claude/skills/claude-shorts/setup.sh
+   ```
+   On Windows, use PowerShell instead:
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File "$HOME/.claude/skills/claude-shorts/setup.ps1"
    ```
 3. Open Claude Code and type:
    ```
    /claude-shorts edit the newest clip in ~/Downloads
+   ```
+
+For a long video:
+   ```
+   /claude-shorts turn ~/Movies/my-video.mp4 into 10 shorts
    ```
 
 Claude walks you through it: confirm the clip, check the transcript, approve the cuts, check the captions,
@@ -56,7 +71,7 @@ or drop a `.ttf` in `~/.config/claude-shorts/fonts/`. Your choice is saved in
 ## Good to know
 
 - Made for vertical talking-head clips (1080x1920 output, your clip's own frame rate).
-- Needs macOS with Homebrew.
+- Works on macOS, Windows 10/11 x64 (ARM64 needs Windows 11), and Linux (Debian/Ubuntu, Fedora or Arch). Setup may ask for your OS password.
 - Copyrighted music from YouTube can get your Short claimed or muted. Use royalty-free tracks for posting.
 - Add names Whisper keeps misspelling to `~/.config/claude-shorts/glossary.txt` (`Correct = wrong, wrong`).
 
