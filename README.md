@@ -59,7 +59,8 @@ For a long video:
    ```
 
 Claude walks you through it: confirm the clip, check the transcript, approve the cuts, check the captions,
-pick music, pick a thumbnail. About 2 minutes of processing for a 1-minute clip.
+pick music, pick a thumbnail. About 2 minutes of processing for a 1-minute clip on an Apple Silicon Mac;
+Windows and Linux PCs without a GPU take longer (transcription runs on the CPU).
 
 ## Fonts
 
