@@ -9,6 +9,7 @@ Usage: music_bed.py <music file> <workdir> [--under 13.5] [--start 0]
 - --start skips into the track (seconds) when its intro is too quiet or too long.
 Writes <workdir>/music.wav (48 kHz stereo, exactly the cut's sample length).
 """
+from platform_tools import find_tool
 import argparse, os, re, subprocess
 
 ap = argparse.ArgumentParser()
@@ -19,13 +20,13 @@ cut = os.path.join(a.work, "cut.mov"); out = os.path.join(a.work, "music.wav")
 
 
 def lufs(path):
-    r = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", path, "-af", "ebur128", "-f", "null", "-"],
-                       capture_output=True, text=True).stderr
+    r = subprocess.run([find_tool("ffmpeg"), "-hide_banner", "-nostats", "-i", path, "-af", "ebur128", "-f", "null", "-"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace").stderr
     return float(re.findall(r"I:\s+(-?[\d.]+) LUFS", r)[-1])
 
 
-D = float(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=duration",
-                          "-of", "csv=p=0", cut], capture_output=True, text=True).stdout)
+D = float(subprocess.run([find_tool("ffprobe"), "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=duration",
+                          "-of", "csv=p=0", cut], capture_output=True, text=True, encoding="utf-8", errors="replace").stdout)
 N = round(D * 48000)
 v = lufs(cut)
 
@@ -34,7 +35,7 @@ def build(gain_db):
     fc = (f"[0:a]aresample=48000,atrim=start={a.start}:end_sample={N + round(a.start * 48000)},asetpts=PTS-STARTPTS,volume={gain_db:.2f}dB[m];"
           f"[1:a]aresample=48000,asplit=2[sc][v];[m][sc]sidechaincompress=threshold=0.015:ratio=2.5:attack=40:release=400:makeup=1[duck];"
           f"[duck]afade=t=in:d=0.6,afade=t=out:st={D - 2.5:.4f}:d=2.5,apad=whole_len={N},atrim=end_sample={N}[out];[v]anullsink")
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", a.music, "-i", cut, "-filter_complex", fc,
+    subprocess.run([find_tool("ffmpeg"), "-y", "-v", "error", "-i", a.music, "-i", cut, "-filter_complex", fc,
                     "-map", "[out]", "-ac", "2", "-c:a", "pcm_s24le", out], check=True)
     return lufs(out)
 

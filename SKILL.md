@@ -5,28 +5,50 @@ description: >-
   with no editing app: cuts dead air, retakes and fillers, writes spell-checked and grammar-fixed word-by-word
   captions with brand logos, adds image overlays, mixes in ducked background music (from a file or a YouTube
   link), normalises loudness, picks a thumbnail frame and drafts the title. Runs locally on ffmpeg, whisper.cpp
-  and Python. Use whenever someone hands over a vertical clip or a folder of clips and says "edit this short",
-  "make this a reel", "caption this", "cut the retakes", "add music", or types /claude-shorts.
+  and Python. Also turns one long (landscape) video, podcast or webinar into about 10 vertical Shorts in one batch:
+  picks the moments that stand alone, reframes face and screen-recording shots to 9:16, captions and exports
+  each. Use whenever someone hands over a vertical clip or a folder of clips and says "edit this short",
+  "make this a reel", "caption this", "cut the retakes", "add music", or a long video and says "turn this into
+  shorts", "clip this", "make 10 shorts from my video", "repurpose this for TikTok", or types /claude-shorts.
 ---
 
 # claude-shorts
 
-One raw vertical clip in, one upload-ready 1080x1920 Short out. Everything runs on the user's Mac: ffmpeg,
+One raw vertical clip in, one upload-ready 1080x1920 Short out. Or one long video in, about 10 Shorts out:
+for that, read `$SK/references/long-video.md` and follow it instead of the steps below (it reuses them). Everything runs on the user's Mac, Windows PC or Linux machine: ffmpeg,
 whisper.cpp and Python (Pillow). No DaVinci, no CapCut, no API keys.
 
 Run it as a short conversation. Each step either shows progress (a transcript, a cut list, a preview) or asks a
 real choice. **Never ask things the clip already answers** (resolution, frame rate, length, orientation) and
 never ask more than one question at a time. Keep each message to a few lines.
 
-## Paths
+## OS and paths (do this first)
 
-- `$SK` = this skill's folder. Scripts in `$SK/scripts/`, fonts, logos, settings and glossary in `$SK/assets/`.
-- `$PY` = `~/.cache/claude-shorts/venv/bin/python` (Pillow + CairoSVG). If it or `whisper-cli` is missing,
-  run `zsh $SK/setup.sh` first and tell the user it is a one-time setup (it downloads a 3 GB speech model).
-- `$W` = a work folder in the session scratchpad (or `/tmp/claude-shorts/<clip name>`).
-- Output folder `$OUT` = `<clip's folder>/<clip name> - short/` unless `~/.config/claude-shorts/profile.md`
-  says otherwise. Read that file first if it exists: it holds the user's standing preferences.
-- Shell is zsh: brace variables before a colon (`${W}:x`).
+Detect the OS from the session before running commands. Use **native PowerShell on Windows**, and bash on
+macOS/Linux; never require WSL or zsh. Claude runs setup and installs prerequisites for the user. If an OS
+password/UAC prompt appears, explain it briefly; do not ask them to install tools by hand.
+
+- `$SK` = this skill's absolute folder; `$W` = a work folder in the session scratchpad or the OS temp directory
+  (`[IO.Path]::GetTempPath()` on Windows, `${TMPDIR:-/tmp}` on macOS/Linux), with a subfolder per clip.
+- `$PY` = `$HOME/.cache/claude-shorts/venv/bin/python` on macOS/Linux, or
+  `Join-Path $HOME '.cache\claude-shorts\venv\Scripts\python.exe'` on Windows. Use this Python for **every** script.
+- If the venv/tools are missing, run `bash "$SK/setup.sh"` on macOS/Linux, or
+  `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$SK\setup.ps1"` on Windows. The one-time setup
+  downloads a 3 GB speech model. Then run `scripts/check_setup.py` with `$PY` (Windows: `& $PY ...`).
+- Windows setup changes the user PATH. In the current PowerShell session, refresh it after setup:
+  `$env:PYTHONUTF8 = '1'; $env:Path = [Environment]::GetEnvironmentVariable('Path','User') + ';' + [Environment]::GetEnvironmentVariable('Path','Machine')`.
+  On macOS/Linux add `export PATH="$HOME/.cache/claude-shorts/bin:/opt/homebrew/bin:/usr/local/bin:/home/linuxbrew/.linuxbrew/bin:$PATH"`.
+- Output `$OUT` = `<clip's folder>/<clip name> - short/` unless `~/.config/claude-shorts/profile.md` says otherwise.
+  Read that file first if it exists. `~` means the user's home on all platforms; expand it before passing to tools.
+
+The examples below and in `references/long-video.md` use bash notation. **Translate them on Windows**:
+`"$PY" "$SK/scripts/transcribe.py" <clip> "$W"` becomes `& $PY "$SK/scripts/transcribe.py" <clip> $W`;
+`FPS=<fps> "$PY" ...` becomes `$env:FPS='<fps>'; & $PY ...`. Set variables with `$W = '...'`, use
+`New-Item -ItemType Directory -Force` for folders, and quote every path (spaces and non-ASCII names are valid).
+Use UTF-8 for all text/JSON files; in Windows PowerShell 5.1 use
+`[IO.File]::WriteAllText($path, $text, (New-Object Text.UTF8Encoding($false)))` to avoid UTF-16/BOM output.
+Fonts are rendered with Pillow, so no font path enters an ffmpeg filter. If adding a drawtext filter, escape
+its drive-letter colon and filter metacharacters separately from shell quoting.
 
 ## 1. Find the clip
 
@@ -35,12 +57,14 @@ never ask more than one question at a time. Keep each message to a few lines.
   look at it). Ask **"Is this the one?"** If they gave nothing, ask **"Where are your clips?"**
 - Probe it: `ffprobe -v error -show_entries stream=codec_type,width,height,r_frame_rate -show_entries format=duration -of compact <clip>`.
   Output is always 1080x1920 at the **clip's own frame rate** (`r_frame_rate`, e.g. 30000/1001). Pass it as
-  `FPS` / `--fps` everywhere below. If the clip is landscape, say so and stop: this skill is for vertical clips.
+  `FPS` / `--fps` everywhere below. **If the video is landscape or longer than about 3 minutes**, it is a long
+  video: switch to `$SK/references/long-video.md` (ask "Want me to cut this into Shorts?" first only if they did
+  not already say so).
 
 ## 2. Transcript, cleaned
 
 ```bash
-python3 $SK/scripts/transcribe.py <clip> $W
+"$PY" "$SK/scripts/transcribe.py" <clip> "$W"
 ```
 Splits at every pause and transcribes each piece alone, so retakes stay separate. Read `$W/transcript.md` in
 full. Then write the **clean transcript**: the final take of each sentence only, with
@@ -59,15 +83,15 @@ Decide which chunks to keep: the last complete take of every sentence; drop fals
 stray "okay"s, noise chunks (`no words`, `prompt-echo?` flags are usually breath or noise), and anything
 after the last real line. Then:
 ```bash
-python3 $SK/scripts/plan_cut.py $W "c05,c06,c08,..." --fps <fps>
+"$PY" "$SK/scripts/plan_cut.py" "$W" "c05,c06,c08,..." --fps <fps>
 ```
 It joins chunks less than 0.5 s apart (pauses inside a thought stay), cuts longer gaps, pads every cut, and
 checks each cut point is silent. `c12:33.70-35.36` trims a chunk to a source-time range. It must report
 **0 silence warnings**; if not, move that edge. Show the user the cut list it prints (what goes, old -> new
 length) and ask **"Cut it?"** On yes:
 ```bash
-python3 $SK/scripts/render_cut.py <clip> $W        # -> $W/cut.mov, checks the frame count
-python3 $SK/scripts/words_on_cut.py $W --fps <fps> # -> $W/words_cut.json
+"$PY" "$SK/scripts/render_cut.py" <clip> "$W"        # -> "$W/cut.mov", checks the frame count
+"$PY" "$SK/scripts/words_on_cut.py" "$W" --fps <fps> # -> "$W/words_cut.json"
 ```
 
 ## 4. Captions
@@ -93,13 +117,13 @@ style | display text (the CLEAN wording) | number of spoken words it covers | op
   `https://svgl.app` into `$W/logos/<name>.svg`. Use a logo only when the line names that product.
 
 ```bash
-FPS=<fps> $PY $SK/scripts/captions.py $W list   # must consume every word; read the mapping for misalignments
-FPS=<fps> $PY $SK/scripts/captions.py $W qa     # every block fully revealed -> $W/previews/qa.jpg
+FPS=<fps> "$PY" "$SK/scripts/captions.py" "$W" list   # must consume every word; read the mapping for misalignments
+FPS=<fps> "$PY" "$SK/scripts/captions.py" "$W" qa     # every block fully revealed -> "$W/previews/qa.jpg"
 ```
 **Look at `qa.jpg` yourself before showing anyone**: text over the head, lines colliding, words cut off,
 anything hard to read. Fix `blocks.txt` and re-run. Then show it and ask **"Captions look right?"** On yes:
 ```bash
-FPS=<fps> $PY $SK/scripts/captions.py $W full $W/captions.mov <frames of cut.mov>
+FPS=<fps> "$PY" "$SK/scripts/captions.py" "$W" full "$W/captions.mov" <frames of cut.mov>
 ```
 
 ## 5. Overlays (optional, offer in one line)
@@ -113,32 +137,33 @@ band (y 260-610) unless it is a full-screen cutaway. Skip if they say no.
 ## 6. Music
 
 Ask **"Music: none, a file you have, or a YouTube link?"**
-- Link: `zsh $SK/scripts/get_music.sh "<url>" $W/music` (updates yt-dlp first; old versions fail on YouTube).
+- Link: `"$PY" "$SK/scripts/get_music.py" "<url>" "$W/music"` (updates yt-dlp first; old versions fail on YouTube).
   Strip playlist parameters from the URL. Mention once that copyrighted songs can get the Short claimed or
   muted, so royalty-free music is safer for posting.
-- Then: `python3 $SK/scripts/music_bed.py "<music file>" $W` -> `$W/music.wav`, 13.5 dB under the voice,
+- Then: `"$PY" "$SK/scripts/music_bed.py" "<music file>" "$W"` -> `"$W/music.wav"`, 13.5 dB under the voice,
   ducked while they talk, faded in and out. `--start 30` skips a long intro.
 
 ## 7. Export
 
 ```bash
-python3 $SK/scripts/compose.py $W "$OUT/<name>.mp4"           # add --no-music if they chose none
+"$PY" "$SK/scripts/compose.py" "$W" "$OUT/<name>.mp4"           # add --no-music if they chose none
 ```
 Overlays captions and images, gives the voice plain gain only (no EQ or compression: it made voices sound
 worse), mixes the music, normalises to -14 LUFS. Check the output: `ffprobe` frame count = cut frames,
 1080x1920; grab two frames and look that captions are burned in. Report length, LUFS, and where the file is.
-`open -R` the file so they can see it.
+Reveal the export: macOS `open -R "$OUT/<name>.mp4"`; Windows
+`explorer.exe "/select,$OUT\<name>.mp4"`; Linux `xdg-open "$OUT"` (opens its folder; skip on headless machines).
 
 ## 8. Thumbnail and title
 
-- Thumbnail: `$PY $SK/scripts/frame_sheet.py $W/cut.mov $W/frames 0.9,2.2,4.2,...` (face-to-camera moments),
+- Thumbnail: `"$PY" "$SK/scripts/frame_sheet.py" "$W/cut.mov" "$W/frames" 0.9,2.2,4.2,...` (face-to-camera moments),
   pick frames with eyes open, sharp, closed-mouth smile, not mid-word. Then
-  `$PY $SK/scripts/thumbnail.py $W/frames/f_<t>.png "$OUT/thumbnail.png" "s:Honestly,|h@openai:OpenAI Dots|c:Sucks" --scale 0.8 --cy 472`
+  `"$PY" "$SK/scripts/thumbnail.py" "$W/frames/f_<t>.png" "$OUT/thumbnail.png" "s:Honestly,|h@openai:OpenAI Dots|c:Sucks" --scale 0.8 --cy 472`
   (`s:` small, `h:` bold hero, `c:` script hero, `@logo`). Keep the block between y 260 and 690 (Instagram crops
   the cover to 3:4). Show 2-3 options, ask **"Which one?"**
 - Title: write 5 options under 60 characters from what they actually say (no invented claims), recommend one,
   ask **"Lock this title?"** Then a 2-4 line description with 3-5 hashtags. On lock, rename the export to the
-  title (strip `?`, `…` and emoji from file names) and save `title.txt` and `description.txt` next to it.
+  title (strip `<>:"/\|?*`, control characters, `…` and emoji; trim trailing dots/spaces and avoid Windows reserved names such as CON, NUL and COM1) and save `title.txt` and `description.txt` next to it.
 
 ## Rules that came from real runs
 

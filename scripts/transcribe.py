@@ -9,11 +9,12 @@ i.e. retakes, are never merged), and writes:
   <workdir>/transcript.json  {"duration", "chunks": [{start, end, text, words: [{w, start, end}]}]}
   <workdir>/transcript.md    one line per chunk with [pause X.XXs] markers, for reading
 """
+from platform_tools import CACHE, download_model, find_tool
 import json, math, os, re, struct, subprocess, sys, wave
 from concurrent.futures import ThreadPoolExecutor
 
 MODELS = [os.path.expanduser(p) for p in (
-    "~/.cache/claude-shorts/ggml-large-v3.bin",
+    str(CACHE / "ggml-large-v3.bin"),
     "~/.cache/hyperframes/whisper/models/ggml-large-v3.bin",
 )]
 MODEL_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin"
@@ -23,14 +24,14 @@ GAP, TH, PAD = 0.30, 0.03, 0.15
 
 def model_path():
     if "--model" in sys.argv:
-        return sys.argv[sys.argv.index("--model") + 1]
+        return os.path.expanduser(sys.argv[sys.argv.index("--model") + 1])
     for p in MODELS:
-        if os.path.exists(p):
+        if os.path.isfile(p) and os.path.getsize(p) > 0:
             return p
     p = MODELS[0]
     os.makedirs(os.path.dirname(p), exist_ok=True)
     print(f"downloading whisper large-v3 (3 GB, once) -> {p}", file=sys.stderr)
-    subprocess.run(["curl", "-L", "--fail", "-o", p, MODEL_URL], check=True)
+    download_model(p)
     return p
 
 
@@ -59,10 +60,25 @@ def split(r, th, mingap):
     return segs
 
 
+def workers():
+    # Each whisper-cli loads the ~3.5 GB model; three at once gets OOM-killed on 8 GB Linux/Windows PCs.
+    if sys.platform == "darwin": return 3
+    try:
+        if os.name == "nt":
+            import ctypes
+            class M(ctypes.Structure):
+                _fields_ = [("l", ctypes.c_ulong), ("m", ctypes.c_ulong)] + [(n, ctypes.c_ulonglong) for n in "abcdefg"]
+            m = M(); m.l = ctypes.sizeof(M); ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m)); ram = m.a
+        else:
+            ram = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    except Exception: return 1
+    return max(1, min(3, int(ram / 2**30 // 6)))
+
+
 def transcribe(model, wav, offset):
-    subprocess.run(["whisper-cli", "-m", model, "-f", wav, "-np", "-l", "en", "--prompt", PROMPT,
-                    "-ml", "1", "-sow", "-oj", "-of", wav[:-4]], capture_output=True, text=True)
-    try: segs = json.load(open(wav[:-4] + ".json"))["transcription"]
+    subprocess.run([find_tool("whisper-cli"), "-m", model, "-f", wav, "-np", "-l", "en", "--prompt", PROMPT,
+                    "-ml", "1", "-sow", "-oj", "-of", wav[:-4]], capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
+    try: segs = json.load(open(wav[:-4] + ".json", encoding="utf-8"))["transcription"]
     except Exception: return "", []
     words = []
     for s in segs:
@@ -78,21 +94,21 @@ def main():
     model = model_path()
     cdir = os.path.join(work, ".chunks"); os.makedirs(cdir, exist_ok=True)
     wav = os.path.join(work, "audio.wav")
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", clip, "-vn", "-ac", "1", "-ar", "16000", wav], check=True)
+    subprocess.run([find_tool("ffmpeg"), "-y", "-v", "error", "-i", clip, "-vn", "-ac", "1", "-ar", "16000", wav], check=True)
     r, raw, sr, total = rms_series(wav); dur = total / sr
     segs = split(r, TH, GAP); jobs = []
     for i, (s, e) in enumerate(segs):
         s2 = max(0, s - PAD); e2 = min(dur, e + PAD); p = os.path.join(cdir, f"{i:03d}.wav")
         o = wave.open(p, "wb"); o.setnchannels(1); o.setsampwidth(2); o.setframerate(sr)
         o.writeframes(raw[int(s2 * sr) * 2:int(e2 * sr) * 2]); o.close(); jobs.append((p, s2))
-    with ThreadPoolExecutor(3) as ex:
+    with ThreadPoolExecutor(workers()) as ex:
         outs = list(ex.map(lambda j: transcribe(model, *j), jobs))
     chunks = []
     for (s, e), (text, words) in zip(segs, outs):
         flag = "prompt-echo?" if text and text.lower().strip(" .") in PROMPT.lower() else None
         if not text: flag = "no words (breath/noise?)"
         chunks.append({"start": round(s, 2), "end": round(e, 2), "text": text, "words": words, **({"flag": flag} if flag else {})})
-    json.dump({"duration": round(dur, 3), "chunks": chunks}, open(os.path.join(work, "transcript.json"), "w"), indent=1)
+    json.dump({"duration": round(dur, 3), "chunks": chunks}, open(os.path.join(work, "transcript.json"), "w", encoding="utf-8"), indent=1)
     md = [f"# Transcript: {os.path.basename(clip)} ({dur:.2f}s)", "",
           "One line per chunk (split at pauses >= 0.30 s). Fillers and retakes kept.", ""]
     if segs: md.append(f"[pause {segs[0][0]:.2f}s at head]")
@@ -103,7 +119,7 @@ def main():
         md.append(f"c{i:02d} [{c['start']:.2f}-{c['end']:.2f}] {c['text'] or '(sound, no words)'}{note}")
         prev = c["end"]
     if segs: md.append(f"[pause {dur - segs[-1][1]:.2f}s at tail]")
-    open(os.path.join(work, "transcript.md"), "w").write("\n".join(md) + "\n")
+    open(os.path.join(work, "transcript.md"), "w", encoding="utf-8").write("\n".join(md) + "\n")
     print(f"{len(chunks)} chunks, {dur:.1f}s -> {os.path.join(work, 'transcript.md')}", file=sys.stderr)
 
 
