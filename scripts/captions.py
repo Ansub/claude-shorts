@@ -271,7 +271,7 @@ def load_blocks():
                 if L["style"] != "s":
                     layout_line(L, fit)
             total = sum(L["bh"] for L in b) + S["gap"] * (len(b) - 1)
-            if total > band:  # small words never shrink, so the block itself is too long: split it in blocks.txt
+            if total > band + 0.5:  # small words never shrink, so the block itself is too long: split it in blocks.txt
                 print(f"WARN block {k} ('{b[0]['text']}' ...) is {total}px tall, the band is {band}px: split it", file=sys.stderr)
         y = round(B["cy"] - total / 2)
         y = max(B["safeTop"], min(y, B["safeBot"] - total))

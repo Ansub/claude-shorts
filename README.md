@@ -10,10 +10,6 @@ back a finished Short:
 - **Loudness** normalised to -14 LUFS for YouTube, Instagram and TikTok
 - **Thumbnail and title** drafted from what you actually say
 
-**Got a long video instead?** Give it the whole thing (a YouTube video, podcast or webinar) and it picks the
-~10 moments that work on their own, reframes them vertical (your face, or screen on top and face below for
-screen recordings), and makes a finished Short of each. You approve the list once; it does the rest.
-
 No editing app. It runs on macOS, Windows and Linux with ffmpeg, whisper.cpp and Python. No API keys, nothing uploaded.
 
 ## Install with one prompt
@@ -53,11 +49,6 @@ Install the claude-shorts skill for me:
    /claude-shorts edit the newest clip in ~/Downloads
    ```
 
-For a long video:
-   ```
-   /claude-shorts turn ~/Movies/my-video.mp4 into 10 shorts
-   ```
-
 Claude walks you through it: confirm the clip, check the transcript, approve the cuts, check the captions,
 pick music, pick a thumbnail. About 2 minutes of processing for a 1-minute clip on an Apple Silicon Mac;
 Windows and Linux PCs without a GPU take longer (transcription runs on the CPU).
@@ -71,7 +62,8 @@ or drop a `.ttf` in `~/.config/claude-shorts/fonts/`. Your choice is saved in
 
 ## Good to know
 
-- Made for vertical talking-head clips (1080x1920 output, your clip's own frame rate).
+- Made for vertical talking-head clips (1080x1920 output, your clip's own frame rate). Want ~10 Shorts cut from
+  one long video instead? Use [long-to-shorts](https://github.com/Ansub/long-to-shorts).
 - Works on macOS, Windows 10/11 x64 (ARM64 needs Windows 11), and Linux (Debian/Ubuntu, Fedora or Arch). Setup may ask for your OS password.
 - Copyrighted music from YouTube can get your Short claimed or muted. Use royalty-free tracks for posting.
 - Add names Whisper keeps misspelling to `~/.config/claude-shorts/glossary.txt` (`Correct = wrong, wrong`).

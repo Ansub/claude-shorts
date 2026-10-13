@@ -5,17 +5,13 @@ description: >-
   with no editing app: cuts dead air, retakes and fillers, writes spell-checked and grammar-fixed word-by-word
   captions with brand logos, adds image overlays, mixes in ducked background music (from a file or a YouTube
   link), normalises loudness, picks a thumbnail frame and drafts the title. Runs locally on ffmpeg, whisper.cpp
-  and Python. Also turns one long (landscape) video, podcast or webinar into about 10 vertical Shorts in one batch:
-  picks the moments that stand alone, reframes face and screen-recording shots to 9:16, captions and exports
-  each. Use whenever someone hands over a vertical clip or a folder of clips and says "edit this short",
-  "make this a reel", "caption this", "cut the retakes", "add music", or a long video and says "turn this into
-  shorts", "clip this", "make 10 shorts from my video", "repurpose this for TikTok", or types /claude-shorts.
+  and Python. Use whenever someone hands over a vertical clip or a folder of clips and says "edit this short",
+  "make this a reel", "caption this", "cut the retakes", "add music", or types /claude-shorts.
 ---
 
 # claude-shorts
 
-One raw vertical clip in, one upload-ready 1080x1920 Short out. Or one long video in, about 10 Shorts out:
-for that, read `$SK/references/long-video.md` and follow it instead of the steps below (it reuses them). Everything runs on the user's Mac, Windows PC or Linux machine: ffmpeg,
+One raw vertical clip in, one upload-ready 1080x1920 Short out. Everything runs on the user's Mac, Windows PC or Linux machine: ffmpeg,
 whisper.cpp and Python (Pillow). No DaVinci, no CapCut, no API keys.
 
 Run it as a short conversation. Each step either shows progress (a transcript, a cut list, a preview) or asks a
@@ -41,7 +37,7 @@ password/UAC prompt appears, explain it briefly; do not ask them to install tool
 - Output `$OUT` = `<clip's folder>/<clip name> - short/` unless `~/.config/claude-shorts/profile.md` says otherwise.
   Read that file first if it exists. `~` means the user's home on all platforms; expand it before passing to tools.
 
-The examples below and in `references/long-video.md` use bash notation. **Translate them on Windows**:
+The examples below use bash notation. **Translate them on Windows**:
 `"$PY" "$SK/scripts/transcribe.py" <clip> "$W"` becomes `& $PY "$SK/scripts/transcribe.py" <clip> $W`;
 `FPS=<fps> "$PY" ...` becomes `$env:FPS='<fps>'; & $PY ...`. Set variables with `$W = '...'`, use
 `New-Item -ItemType Directory -Force` for folders, and quote every path (spaces and non-ASCII names are valid).
@@ -57,9 +53,8 @@ its drive-letter colon and filter metacharacters separately from shell quoting.
   look at it). Ask **"Is this the one?"** If they gave nothing, ask **"Where are your clips?"**
 - Probe it: `ffprobe -v error -show_entries stream=codec_type,width,height,r_frame_rate -show_entries format=duration -of compact <clip>`.
   Output is always 1080x1920 at the **clip's own frame rate** (`r_frame_rate`, e.g. 30000/1001). Pass it as
-  `FPS` / `--fps` everywhere below. **If the video is landscape or longer than about 3 minutes**, it is a long
-  video: switch to `$SK/references/long-video.md` (ask "Want me to cut this into Shorts?" first only if they did
-  not already say so).
+  `FPS` / `--fps` everywhere below. If the clip is landscape, or a long video they want cut into many Shorts,
+  say so and stop: the free `long-to-shorts` skill does that (https://github.com/Ansub/long-to-shorts).
 
 ## 2. Transcript, cleaned
 
